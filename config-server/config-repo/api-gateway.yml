@@ -1,0 +1,38 @@
+server:
+  port: 8080
+
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: class-service
+          uri: lb://class-service
+          predicates:
+            - Path=/api/classes/**
+        - id: booking-service
+          uri: lb://booking-service
+          predicates:
+            - Path=/api/bookings/**
+        - id: payment-service
+          uri: lb://payment-service
+          predicates:
+            - Path=/api/payments/**
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/notifications/**
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway
+  endpoint:
+    # Depuis Spring Cloud Gateway 4.x, l'endpoint doit etre active en plus d'etre expose ;
+    # GET /actuator/gateway/routes liste alors les 4 routes.
+    gateway:
+      enabled: true

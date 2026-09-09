@@ -1,0 +1,22 @@
+spring:
+  cloud:
+    config:
+      enabled: false
+    discovery:
+      enabled: false
+  datasource:
+    url: jdbc:h2:mem:bookingdb-test;DB_CLOSE_DELAY=-1
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+
+eureka:
+  client:
+    enabled: false
+
+fitconnect:
+  scheduler:
+    # Les tests declenchent les traitements a la main : le planificateur ne doit pas
+    # se reveiller pendant un test (1er janvier a minuit).
+    expiration-cron: "0 0 0 1 1 *"
+    reminder-cron: "0 0 0 1 1 *"

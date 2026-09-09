@@ -1,0 +1,1356 @@
+{
+  "info": {
+    "name": "FitConnect - Reservation et paiement de cours de sport",
+    "description": "Collection de bout en bout du TP FitConnect.\n\nToutes les requetes passent par l'api-gateway (http://localhost:8080).\nLes dossiers sont concus pour etre executes dans l'ordre : le dossier 1 cree le cours, le dossier 2 le reserve, le dossier 3 le paie, le dossier 4 annule et verifie le remboursement, le dossier 5 couvre les cas d'erreur.\n\nPrerequis : eureka-server, config-server, api-gateway et les 4 services metier demarres.\nAstuce : Runner Postman sur la collection entiere pour rejouer le scenario complet.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "description": "api-gateway ; mettre http://localhost:8091 etc. pour attaquer un service en direct"
+    },
+    {
+      "key": "classId",
+      "value": ""
+    },
+    {
+      "key": "bookingId",
+      "value": ""
+    },
+    {
+      "key": "paymentId",
+      "value": ""
+    },
+    {
+      "key": "fullClassId",
+      "value": ""
+    },
+    {
+      "key": "expensiveClassId",
+      "value": ""
+    },
+    {
+      "key": "expensiveBookingId",
+      "value": ""
+    },
+    {
+      "key": "soonClassId",
+      "value": ""
+    },
+    {
+      "key": "soonBookingId",
+      "value": ""
+    },
+    {
+      "key": "classDateTime",
+      "value": ""
+    },
+    {
+      "key": "soonDateTime",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Gestion des cours",
+      "item": [
+        {
+          "name": "Creer un cours",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/classes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "classes"
+              ]
+            },
+            "description": "Cree le cours utilise par tout le reste de la collection et memorise son id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Yoga Vinyasa\",\n  \"description\": \"Cours cree par la collection Postman\",\n  \"instructor\": \"Marie Dupont\",\n  \"gymLocation\": \"Paris 11e\",\n  \"category\": \"YOGA\",\n  \"level\": \"BEGINNER\",\n  \"durationMinutes\": 60,\n  \"maxParticipants\": 20,\n  \"price\": \"15.00\",\n  \"dateTime\": \"{{classDateTime}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Les cours doivent etre dans le futur : les dates sont recalculees a chaque execution.",
+                  "const iso = (ms) => new Date(Date.now() + ms).toISOString().slice(0, 19);",
+                  "pm.collectionVariables.set('classDateTime', iso(5 * 24 * 3600 * 1000));   // dans 5 jours",
+                  "pm.collectionVariables.set('soonDateTime', iso(12 * 3600 * 1000));        // dans 12 heures"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('Le cours demarre a 0 participant', () => pm.expect(body.currentParticipants).to.eql(0));",
+                  "pm.test('Statut SCHEDULED', () => pm.expect(body.status).to.eql('SCHEDULED'));",
+                  "pm.collectionVariables.set('classId', body.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Lister les cours",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/classes?page=0&size=10&sort=dateTime,asc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "classes"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                },
+                {
+                  "key": "sort",
+                  "value": "dateTime,asc"
+                }
+              ]
+            },
+            "description": "Liste paginee, triee par date croissante."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Reponse paginee', () => pm.expect(pm.response.json()).to.have.property('content'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filtrer les cours",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/classes?category=YOGA&level=BEGINNER",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "classes"
+              ],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "YOGA"
+                },
+                {
+                  "key": "level",
+                  "value": "BEGINNER"
+                }
+              ]
+            },
+            "description": "Filtres combinables : categorie, niveau, lieu, instructeur, fenetre de dates."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Tous les resultats sont du bon type', () =>",
+                  "    pm.response.json().content.forEach(c => {",
+                  "        pm.expect(c.category).to.eql('YOGA');",
+                  "        pm.expect(c.level).to.eql('BEGINNER');",
+                  "    }));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rechercher par lieu et instructeur",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/classes/search?location=Paris&instructor=Marie",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "classes",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "location",
+                  "value": "Paris"
+                },
+                {
+                  "key": "instructor",
+                  "value": "Marie"
+                }
+              ]
+            },
+            "description": "Recherche insensible a la casse sur le lieu et l'instructeur."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Details d'un cours",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/classes/{{classId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "classes",
+                "{{classId}}"
+              ]
+            },
+            "description": "Detail du cours cree, avec le nombre de places restantes."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Id attendu', () => pm.expect(String(pm.response.json().id))",
+                  "    .to.eql(String(pm.collectionVariables.get('classId'))));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Reservation",
+      "item": [
+        {
+          "name": "Reserver 2 places",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/bookings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bookings"
+              ]
+            },
+            "description": "Cas 1 de la saga : verification du cours, prise des places, reservation en PENDING_PAYMENT.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": 1,\n  \"userEmail\": \"john@example.com\",\n  \"userName\": \"John Doe\",\n  \"classId\": \"{{classId}}\",\n  \"numberOfSpots\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('Statut PENDING_PAYMENT', () => pm.expect(body.status).to.eql('PENDING_PAYMENT'));",
+                  "pm.test('Reference generee', () => pm.expect(body.bookingReference).to.match(/^BK-/));",
+                  "pm.test('Montant = prix x places', () => pm.expect(Number(body.totalAmount)).to.eql(30));",
+                  "pm.test('Echeance de paiement fixee', () => pm.expect(body.paymentDeadline).to.not.be.null);",
+                  "pm.collectionVariables.set('bookingId', body.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verifier le statut PENDING_PAYMENT",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/bookings/{{bookingId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "{{bookingId}}"
+              ]
+            },
+            "description": "La reservation attend son paiement."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Statut PENDING_PAYMENT', () =>",
+                  "    pm.expect(pm.response.json().status).to.eql('PENDING_PAYMENT'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verifier les places prises sur le cours",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/classes/{{classId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "classes",
+                "{{classId}}"
+              ]
+            },
+            "description": "Les 2 places sont deja retenues, avant meme le paiement."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('2 places prises', () =>",
+                  "    pm.expect(pm.response.json().currentParticipants).to.eql(2));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reservations de l'utilisateur",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/bookings/user/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "user",
+                "1"
+              ]
+            },
+            "description": "Historique des reservations d'un utilisateur."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Paiement",
+      "item": [
+        {
+          "name": "Payer (carte valide)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/bookings/{{bookingId}}/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "{{bookingId}}",
+                "confirm"
+              ]
+            },
+            "description": "Cas 3 de la saga : paiement de 30 EUR (< 100) accepte, la reservation passe CONFIRMED.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMethod\": \"CREDIT_CARD\",\n  \"cardLastFour\": \"1234\",\n  \"transactionId\": \"txn_123456\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Statut CONFIRMED', () =>",
+                  "    pm.expect(pm.response.json().status).to.eql('CONFIRMED'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verifier le statut CONFIRMED",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/bookings/{{bookingId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "{{bookingId}}"
+              ]
+            },
+            "description": "Confirmation persistee."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Statut CONFIRMED', () =>",
+                  "    pm.expect(pm.response.json().status).to.eql('CONFIRMED'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consulter le paiement",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/payments/booking/{{bookingId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "payments",
+                "booking",
+                "{{bookingId}}"
+              ]
+            },
+            "description": "Le paiement encaisse, memorise pour verifier le remboursement plus tard."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Paiement en SUCCESS', () => pm.expect(body.status).to.eql('SUCCESS'));",
+                  "pm.test('Reference de paiement generee', () =>",
+                  "    pm.expect(body.paymentReference).to.match(/^PAY-/));",
+                  "pm.collectionVariables.set('paymentId', body.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Notifications recues",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/user/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "user",
+                "1"
+              ]
+            },
+            "description": "Deux notifications ont ete emises : BOOKING_CONFIRMATION puis PAYMENT_CONFIRMATION."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const types = pm.response.json().map(n => n.type);",
+                  "pm.test('Confirmation de reservation emise', () =>",
+                  "    pm.expect(types).to.include('BOOKING_CONFIRMATION'));",
+                  "pm.test('Confirmation de paiement emise', () =>",
+                  "    pm.expect(types).to.include('PAYMENT_CONFIRMATION'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Annulation (dans les delais)",
+      "item": [
+        {
+          "name": "Annuler la reservation",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/bookings/{{bookingId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "{{bookingId}}",
+                "cancel"
+              ]
+            },
+            "description": "Cas 4 de la saga : annulation a plus de 24h du cours, remboursement et liberation des places."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Statut CANCELLED', () =>",
+                  "    pm.expect(pm.response.json().status).to.eql('CANCELLED'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verifier le remboursement",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/payments/booking/{{bookingId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "payments",
+                "booking",
+                "{{bookingId}}"
+              ]
+            },
+            "description": "Le paiement doit etre passe en REFUNDED."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Paiement rembourse', () =>",
+                  "    pm.expect(pm.response.json().status).to.eql('REFUNDED'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verifier les places liberees",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/classes/{{classId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "classes",
+                "{{classId}}"
+              ]
+            },
+            "description": "Les 2 places sont rendues au cours."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Plus aucune place prise', () =>",
+                  "    pm.expect(pm.response.json().currentParticipants).to.eql(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Notification d'annulation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/user/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "user",
+                "1"
+              ]
+            },
+            "description": "Une notification BOOKING_CANCELLED a ete emise."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Annulation notifiee', () =>",
+                  "    pm.expect(pm.response.json().map(n => n.type)).to.include('BOOKING_CANCELLED'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Scenarios d'erreur",
+      "item": [
+        {
+          "name": "Preparer un cours complet",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/classes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "classes"
+              ]
+            },
+            "description": "Cree un cours de 5 places pour la demonstration de surreservation.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Cours complet\",\n  \"description\": \"Cours cree par la collection Postman\",\n  \"instructor\": \"Marie Dupont\",\n  \"gymLocation\": \"Paris 11e\",\n  \"category\": \"BOXING\",\n  \"level\": \"ADVANCED\",\n  \"durationMinutes\": 60,\n  \"maxParticipants\": 5,\n  \"price\": \"15.00\",\n  \"dateTime\": \"{{classDateTime}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Les cours doivent etre dans le futur : les dates sont recalculees a chaque execution.",
+                  "const iso = (ms) => new Date(Date.now() + ms).toISOString().slice(0, 19);",
+                  "pm.collectionVariables.set('classDateTime', iso(5 * 24 * 3600 * 1000));   // dans 5 jours",
+                  "pm.collectionVariables.set('soonDateTime', iso(12 * 3600 * 1000));        // dans 12 heures"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('fullClassId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Remplir le cours",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/classes/{{fullClassId}}/increment?spots=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "classes",
+                "{{fullClassId}}",
+                "increment"
+              ],
+              "query": [
+                {
+                  "key": "spots",
+                  "value": "5"
+                }
+              ]
+            },
+            "description": "Occupe les 5 places pour placer le cours a sa capacite maximale."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Cours complet', () => pm.expect(pm.response.json().availableSpots).to.eql(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Surreservation (plus de places)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/bookings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bookings"
+              ]
+            },
+            "description": "Aucune place restante : la saga s'arrete avant toute ecriture, aucune compensation requise.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": 1,\n  \"userEmail\": \"john@example.com\",\n  \"userName\": \"John Doe\",\n  \"classId\": \"{{fullClassId}}\",\n  \"numberOfSpots\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+                  "pm.test('Message explicite', () =>",
+                  "    pm.expect(pm.response.json().message).to.include('Plus de places disponibles'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cours trop cher : preparer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/classes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "classes"
+              ]
+            },
+            "description": "Cours a 60 EUR : reserver 2 places donne 120 EUR, au-dela du seuil d'acceptation de 100 EUR.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Coaching prive\",\n  \"description\": \"Cours cree par la collection Postman\",\n  \"instructor\": \"Marie Dupont\",\n  \"gymLocation\": \"Paris 11e\",\n  \"category\": \"CROSSFIT\",\n  \"level\": \"BEGINNER\",\n  \"durationMinutes\": 60,\n  \"maxParticipants\": 10,\n  \"price\": \"60.00\",\n  \"dateTime\": \"{{classDateTime}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Les cours doivent etre dans le futur : les dates sont recalculees a chaque execution.",
+                  "const iso = (ms) => new Date(Date.now() + ms).toISOString().slice(0, 19);",
+                  "pm.collectionVariables.set('classDateTime', iso(5 * 24 * 3600 * 1000));   // dans 5 jours",
+                  "pm.collectionVariables.set('soonDateTime', iso(12 * 3600 * 1000));        // dans 12 heures"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('expensiveClassId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cours trop cher : reserver",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/bookings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bookings"
+              ]
+            },
+            "description": "Reservation de 2 places a 60 EUR, soit 120 EUR a payer.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": 1,\n  \"userEmail\": \"john@example.com\",\n  \"userName\": \"John Doe\",\n  \"classId\": \"{{expensiveClassId}}\",\n  \"numberOfSpots\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('expensiveBookingId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Paiement refuse (montant >= 100 EUR)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/bookings/{{expensiveBookingId}}/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "{{expensiveBookingId}}",
+                "confirm"
+              ]
+            },
+            "description": "Le prestataire refuse : 402, et la reservation reste payable jusqu'a son echeance.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMethod\": \"CREDIT_CARD\",\n  \"cardLastFour\": \"1234\",\n  \"transactionId\": \"txn_123456\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('402 Payment Required', () => pm.response.to.have.status(402));",
+                  "pm.test('La reservation reste payable', () =>",
+                  "    pm.expect(pm.response.json().message).to.include('attente de paiement'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Confirmer une reservation deja annulee",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/bookings/{{bookingId}}/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "{{bookingId}}",
+                "confirm"
+              ]
+            },
+            "description": "La reservation du dossier 4 est annulee : la transition est refusee.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMethod\": \"CREDIT_CARD\",\n  \"cardLastFour\": \"1234\",\n  \"transactionId\": \"txn_123456\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+                  "pm.test('Statut incompatible signale', () =>",
+                  "    pm.expect(pm.response.json().message).to.include('CANCELLED'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Annulation hors delais : preparer le cours",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/classes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "classes"
+              ]
+            },
+            "description": "Cours dans 12 heures : la limite d'annulation (cours - 24h) est deja passee.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Yoga Reveil\",\n  \"description\": \"Cours cree par la collection Postman\",\n  \"instructor\": \"Marie Dupont\",\n  \"gymLocation\": \"Paris 11e\",\n  \"category\": \"YOGA\",\n  \"level\": \"BEGINNER\",\n  \"durationMinutes\": 60,\n  \"maxParticipants\": 15,\n  \"price\": \"15.00\",\n  \"dateTime\": \"{{soonDateTime}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Les cours doivent etre dans le futur : les dates sont recalculees a chaque execution.",
+                  "const iso = (ms) => new Date(Date.now() + ms).toISOString().slice(0, 19);",
+                  "pm.collectionVariables.set('classDateTime', iso(5 * 24 * 3600 * 1000));   // dans 5 jours",
+                  "pm.collectionVariables.set('soonDateTime', iso(12 * 3600 * 1000));        // dans 12 heures"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('soonClassId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Annulation hors delais : reserver",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/bookings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bookings"
+              ]
+            },
+            "description": "Reservation sur le cours imminent.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": 1,\n  \"userEmail\": \"john@example.com\",\n  \"userName\": \"John Doe\",\n  \"classId\": \"{{soonClassId}}\",\n  \"numberOfSpots\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('soonBookingId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Annulation hors delais",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/bookings/{{soonBookingId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "{{soonBookingId}}",
+                "cancel"
+              ]
+            },
+            "description": "Moins de 24h avant le cours : l'annulation est refusee et les places restent prises."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+                  "pm.test('Message explicite', () =>",
+                  "    pm.expect(pm.response.json().message).to.include('Annulation non autorisee'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reservation sur un cours inexistant",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/bookings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bookings"
+              ]
+            },
+            "description": "Le cours reference n'existe pas : la demande du client est invalide.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": 1,\n  \"userEmail\": \"john@example.com\",\n  \"userName\": \"John Doe\",\n  \"classId\": 999999,\n  \"numberOfSpots\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cours invalide (duree et prix hors bornes)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/classes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "classes"
+              ]
+            },
+            "description": "Validation du DTO : duree hors {30,45,60,90} et prix sous 5.00 EUR.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"ab\",\n  \"description\": \"Cours cree par la collection Postman\",\n  \"instructor\": \"Marie Dupont\",\n  \"gymLocation\": \"Paris 11e\",\n  \"category\": \"YOGA\",\n  \"level\": \"BEGINNER\",\n  \"durationMinutes\": 50,\n  \"maxParticipants\": 20,\n  \"price\": \"2.00\",\n  \"dateTime\": \"{{classDateTime}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Les cours doivent etre dans le futur : les dates sont recalculees a chaque execution.",
+                  "const iso = (ms) => new Date(Date.now() + ms).toISOString().slice(0, 19);",
+                  "pm.collectionVariables.set('classDateTime', iso(5 * 24 * 3600 * 1000));   // dans 5 jours",
+                  "pm.collectionVariables.set('soonDateTime', iso(12 * 3600 * 1000));        // dans 12 heures"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "const errors = pm.response.json().fieldErrors;",
+                  "pm.test('Erreurs de champ detaillees', () => {",
+                  "    pm.expect(errors).to.have.property('durationMinutes');",
+                  "    pm.expect(errors).to.have.property('price');",
+                  "    pm.expect(errors).to.have.property('name');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reservations expirees (vue du scheduler)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/bookings/expired",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "expired"
+              ]
+            },
+            "description": "Reservations impayees dont l'echeance est passee ; le scheduler les annule toutes les 5 minutes."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

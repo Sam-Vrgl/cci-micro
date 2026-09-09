@@ -1,0 +1,19 @@
+spring:
+  cloud:
+    config:
+      enabled: false
+    discovery:
+      enabled: false
+  datasource:
+    url: jdbc:h2:mem:classdb-test;DB_CLOSE_DELAY=-1
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  sql:
+    init:
+      # Les tests montent leur propre jeu de donnees : data.sql ne doit pas s'executer
+      mode: never
+
+eureka:
+  client:
+    enabled: false

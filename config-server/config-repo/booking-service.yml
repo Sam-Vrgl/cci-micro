@@ -1,0 +1,63 @@
+server:
+  port: 8092
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:bookingdb;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+  cloud:
+    openfeign:
+      # Active l'enveloppe Circuit Breaker (Resilience4j) autour de chaque client Feign
+      circuitbreaker:
+        enabled: true
+      # Indispensable : le client JDK par defaut ne sait pas emettre de requete PATCH
+      okhttp:
+        enabled: true
+      client:
+        config:
+          default:
+            connectTimeout: 3000
+            readTimeout: 5000
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+    instances:
+      class-service:
+        baseConfig: default
+      payment-service:
+        baseConfig: default
+      notification-service:
+        baseConfig: default
+  timelimiter:
+    configs:
+      default:
+        timeoutDuration: 6s
+
+fitconnect:
+  scheduler:
+    # Expiration des reservations impayees : toutes les 5 minutes
+    expiration-cron: "0 */5 * * * *"
+    # Rappel des cours a 24h : toutes les heures
+    reminder-cron: "0 0 * * * *"
