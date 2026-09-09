@@ -3,8 +3,7 @@
 Projet : plateforme de reservation et de paiement de cours de sport.
 Depot : `cci-micro/` — 8 modules Maven, 99 classes Java, 93 tests automatises.
 
-Documents lies : [README.md](README.md) (documentation technique complete) ·
-[docs/PLAN.md](docs/PLAN.md) (plan d'implementation et suivi).
+Documents lies : [README_CODE.md](README_CODE.md) (documentation technique complete) ·
 
 ---
 

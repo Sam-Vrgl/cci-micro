@@ -317,7 +317,7 @@ cci-micro/
 ├── payment-service/            :8093
 ├── notification-service/       :8094
 ├── postman/                    collection de bout en bout
-└── docs/PLAN.md                plan d'implementation et suivi des livrables
+d'implementation et suivi des livrables
 ```
 
 Chaque service metier suit le meme decoupage : `model` (entites JPA et enums), `repository`,
